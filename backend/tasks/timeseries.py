@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from typing import Any
@@ -20,7 +21,7 @@ _loaded_models: dict[str, Any] = {}
 
 class SimpleTimeSeriesModel(torch.nn.Module):
     """Simple 1D CNN for time-series classification demo."""
-    def __init__(self, input_dim: int = 100, num_classes: int = 2):
+    def __init__(self, num_classes: int = 2):
         super().__init__()
         self.conv = torch.nn.Sequential(
             torch.nn.Conv1d(1, 16, kernel_size=5, padding=2),
@@ -32,8 +33,66 @@ class SimpleTimeSeriesModel(torch.nn.Module):
     def forward(self, x):
         if x.dim() == 2:
             x = x.unsqueeze(1)
-        out = self.conv(x).squeeze(-1)
-        return self.fc(out)
+        return self.fc(self.conv(x).squeeze(-1))
+
+
+class InceptionBlock(torch.nn.Module):
+    def __init__(self, in_channels: int, nb_filters: int = 32, kernel_sizes=(10, 20, 40), bottleneck_size: int = 32):
+        super().__init__()
+        self.bottleneck = torch.nn.Conv1d(in_channels, bottleneck_size, kernel_size=1, bias=False)
+        self.convs = torch.nn.ModuleList([
+            torch.nn.Conv1d(bottleneck_size, nb_filters, kernel_size=k, padding=k // 2, bias=False)
+            for k in kernel_sizes
+        ])
+        self.mp_conv = torch.nn.Sequential(
+            torch.nn.MaxPool1d(kernel_size=3, stride=1, padding=1),
+            torch.nn.Conv1d(in_channels, nb_filters, kernel_size=1, bias=False),
+        )
+        self.bn_act = torch.nn.Sequential(
+            torch.nn.BatchNorm1d(nb_filters * (len(kernel_sizes) + 1)),
+            torch.nn.ReLU(),
+        )
+
+    def forward(self, x):
+        out = torch.cat([c(self.bottleneck(x)) for c in self.convs] + [self.mp_conv(x)], dim=1)
+        return self.bn_act(out)
+
+
+class InceptionTimeModel(torch.nn.Module):
+    """InceptionTime: time-series classification (Fawaz et al., 2020)."""
+    def __init__(self, num_classes: int = 2, nb_filters: int = 32, depth: int = 3):
+        super().__init__()
+        nb_out = nb_filters * 4
+        self.blocks = torch.nn.Sequential(*[
+            InceptionBlock(1 if i == 0 else nb_out, nb_filters) for i in range(depth)
+        ])
+        self.shortcut = torch.nn.Sequential(
+            torch.nn.Conv1d(1, nb_out, kernel_size=1, bias=False),
+            torch.nn.BatchNorm1d(nb_out),
+        )
+        self.pool = torch.nn.AdaptiveAvgPool1d(1)
+        self.fc = torch.nn.Linear(nb_out, num_classes)
+
+    def forward(self, x):
+        if x.dim() == 2:
+            x = x.unsqueeze(1)
+        out = F.relu(self.blocks(x) + self.shortcut(x))
+        return self.fc(self.pool(out).squeeze(-1))
+
+
+_TS_MODELS = {
+    "simple-cnn-1d": {
+        "display_name": "Simple 1D CNN",
+        "architecture": "1D CNN",
+        "description": "Simple 1D convolutional network for time-series demo.",
+        "loader": SimpleTimeSeriesModel,
+    },
+    "inception-time": {
+        "display_name": "InceptionTime",
+        "description": "InceptionTime: deep learning classifier for time-series (Fawaz et al., 2020).",
+        "loader": InceptionTimeModel,
+    },
+}
 
 
 class TimeSeriesTaskHandler(TaskHandler):
@@ -41,9 +100,10 @@ class TimeSeriesTaskHandler(TaskHandler):
 
     def get_models(self) -> list[dict]:
         return [
-            {"name": "simple-cnn-1d", "display_name": "Simple 1D CNN",
-             "architecture": "1D CNN", "description": "Simple 1D convolutional network for time-series demo.",
-             "task": "timeseries"},
+            {"name": name, "display_name": info["display_name"],
+             "architecture": info.get("architecture", ""), "description": info["description"],
+             "task": "timeseries"}
+            for name, info in _TS_MODELS.items()
         ]
 
     def get_explainers(self, model_name: str) -> list[dict]:
@@ -55,8 +115,10 @@ class TimeSeriesTaskHandler(TaskHandler):
         ]
 
     def load_model(self, model_name: str) -> torch.nn.Module:
+        if model_name not in _TS_MODELS:
+            raise ValueError(f"Unknown timeseries model: {model_name}")
         if model_name not in _loaded_models:
-            model = SimpleTimeSeriesModel()
+            model = _TS_MODELS[model_name]["loader"]()
             model.eval()
             _loaded_models[model_name] = model
         return _loaded_models[model_name]
