@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Generated heatmaps
+backend/heatmaps/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OMC internal state
+.omc/
+**/.omc/

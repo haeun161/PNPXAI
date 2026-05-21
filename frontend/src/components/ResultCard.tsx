@@ -1,0 +1,91 @@
+"use client";
+import { ExplainerResult, TaskType } from "@/lib/types";
+
+interface Props {
+  result: ExplainerResult;
+  task: TaskType;
+  rankingMetric: string;
+}
+
+const METRIC_LABELS: Record<string, string> = {
+  mu_fidelity: "Accuracy (Fidelity)",
+  abpc: "Accuracy (AbPC)",
+  sensitivity: "Sensitivity",
+  complexity: "Complexity",
+};
+
+export default function ResultCard({ result, task, rankingMetric }: Props) {
+  const isCompleted = result.status === "completed";
+  const isNotSupported = result.status === "not_supported";
+  const isFailed = result.status === "failed";
+  const isRunning = result.status === "running" || result.status === "pending";
+
+  const metrics = [
+    { key: "mu_fidelity", label: "Accuracy (Fidelity)", value: result.mu_fidelity },
+    { key: "abpc", label: "Accuracy (AbPC)", value: result.abpc },
+    { key: "sensitivity", label: "Sensitivity", value: result.sensitivity },
+    { key: "complexity", label: "Complexity", value: result.complexity },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Visualization */}
+      <div className="relative bg-gray-50 aspect-square">
+        {result.rank != null && (
+          <div className="absolute top-2 left-2 z-10 w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow">
+            #{result.rank}
+          </div>
+        )}
+
+        {isCompleted && result.visualization_url && (
+          <img src={result.visualization_url} alt={result.display_name} className="w-full h-full object-contain" />
+        )}
+        {isNotSupported && (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4">
+            <svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            <span className="text-xs text-center font-medium text-red-500">Not Supported</span>
+          </div>
+        )}
+        {isFailed && (
+          <div className="w-full h-full flex flex-col items-center justify-center text-red-400 p-4">
+            <svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-xs text-center">Error</span>
+            {result.error_message && (
+              <span className="text-xs text-center text-gray-400 mt-1 line-clamp-2">{result.error_message}</span>
+            )}
+          </div>
+        )}
+        {isRunning && (
+          <div className="w-full h-full flex flex-col items-center justify-center">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-gray-400 mt-2">Computing...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <h4 className="text-sm font-semibold text-gray-800">{result.display_name}</h4>
+        {isCompleted && (
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-center">
+            {metrics.map((m) => {
+              const isRanked = rankingMetric === m.key || rankingMetric === "average";
+              return (
+                <div key={m.key} className={isRanked ? "bg-blue-50 rounded px-1" : ""}>
+                  <p className="text-[10px] text-gray-400">{m.label}</p>
+                  <p className="text-xs font-mono font-medium text-gray-700">
+                    {m.value?.toFixed(4) ?? "N/A"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
