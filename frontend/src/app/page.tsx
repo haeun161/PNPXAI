@@ -64,7 +64,7 @@ export default function Home() {
             <TaskSelector selected={task} onSelect={handleTaskChange} disabled={loading} />
             <ModelSelector task={task} selected={model} onSelect={(m) => { setModel(m); setExplainers([]); }} disabled={loading} />
             <DataInput task={task} onDataReady={(data) => setInputData(data)} disabled={loading} />
-            <ExplainerSelector task={task} model={model} selected={explainers} onSelect={setExplainers} disabled={loading} />
+            <ExplainerSelector task={task} model={model} selected={explainers} onSelect={setExplainers} disabled={loading} results={job?.results} />
 
             <button
               onClick={handleRun}
