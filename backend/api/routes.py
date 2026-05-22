@@ -87,6 +87,57 @@ async def explain(
     return {"job_id": job_id}
 
 
+def _has_unregistered_attention(model_obj) -> bool:
+    """Check for attention modules not covered by pnpxai's type registry (e.g. HuggingFace ViT/Swin/CLIP)."""
+    return any(
+        "attention" in type(m).__name__.lower() and len(list(m.children())) > 0
+        for _, m in model_obj.named_modules()
+    )
+
+
+@router.get("/recommend")
+async def recommend_explainers(task: str = Query(...), model: str = Query(...)):
+    from pnpxai.core.recommender.recommender import XaiRecommender, CAM_BASED_EXPLAINERS
+    try:
+        handler = get_task_handler(task)
+        model_obj = handler.load_model(model)
+        modality = handler.get_modality()
+        output = XaiRecommender().recommend(modality, model_obj)
+        explainers = output.explainers
+
+        # pnpxai's detector only knows nn.MultiheadAttention and a few HF types.
+        # For models like HuggingFace ViT/Swin/DeiT/CLIP whose attention classes
+        # are not registered, we detect by class name and remove CAM-based methods.
+        if _has_unregistered_attention(model_obj):
+            explainers = [e for e in explainers if e not in CAM_BASED_EXPLAINERS]
+
+        recommended_names = [e.__name__ for e in explainers]
+        available_names = {e["name"] for e in handler.get_explainers(model) if e.get("compatible", True)}
+        return {"recommended": [n for n in recommended_names if n in available_names]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/validate-model")
+async def validate_model(task: str = Query(...), hf_model_id: str = Query(...)):
+    """Validates a HuggingFace model ID by attempting to load it for the given task."""
+    try:
+        handler = get_task_handler(task)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if task == "timeseries":
+        raise HTTPException(status_code=400, detail="Custom HuggingFace models are not supported for the timeseries task.")
+
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, handler.load_model, hf_model_id)
+        display_name = hf_model_id.split("/")[-1]
+        return {"valid": True, "model_id": hf_model_id, "display_name": display_name}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load model '{hf_model_id}': {e}")
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatus)
 async def get_job_status(job_id: str):
     job = get_job(job_id)
