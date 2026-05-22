@@ -188,9 +188,10 @@ def run_explanation_pipeline(
                     attribution = np.zeros(10)
                     attribution_raw = torch.zeros(1, 10)
 
-                # Compute metrics
+                # Compute metrics (MuFidelity not compatible with text embeddings)
                 metric_values = {}
-                for metric_name in ["MuFidelity", "AbPC", "Sensitivity", "Complexity"]:
+                metric_list = ["AbPC", "Sensitivity", "Complexity"] if task == "text" else ["MuFidelity", "AbPC", "Sensitivity", "Complexity"]
+                for metric_name in metric_list:
                     try:
                         metric_instance = _get_pnpxai_metric(metric_name, explainer_model, explainer_instance)
                         if input_tensor is not None:

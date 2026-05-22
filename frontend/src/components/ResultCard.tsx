@@ -20,12 +20,13 @@ export default function ResultCard({ result, task, rankingMetric }: Props) {
   const isFailed = result.status === "failed";
   const isRunning = result.status === "running" || result.status === "pending";
 
-  const metrics = [
+  const allMetrics = [
     { key: "mu_fidelity", label: "Accuracy (Fidelity)", value: result.mu_fidelity },
     { key: "abpc", label: "Accuracy (AbPC)", value: result.abpc },
     { key: "sensitivity", label: "Sensitivity", value: result.sensitivity },
     { key: "complexity", label: "Complexity", value: result.complexity },
   ];
+  const metrics = task === "text" ? allMetrics.filter((m) => m.key !== "mu_fidelity") : allMetrics;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

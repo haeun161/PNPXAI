@@ -9,7 +9,7 @@ interface Props {
   rankingMetric: string;
 }
 
-const RANKING_OPTIONS = [
+const ALL_RANKING_OPTIONS = [
   { value: "average", label: "Average (All)" },
   { value: "mu_fidelity", label: "Accuracy (Fidelity)" },
   { value: "abpc", label: "Accuracy (AbPC)" },
@@ -44,6 +44,9 @@ function getRankScore(r: ExplainerResult, metric: string): number {
 }
 
 export default function ResultsPanel({ results, task, rankingMetric: initialMetric }: Props) {
+  const RANKING_OPTIONS = task === "text"
+    ? ALL_RANKING_OPTIONS.filter((o) => o.value !== "mu_fidelity")
+    : ALL_RANKING_OPTIONS;
   const [activeMetric, setActiveMetric] = useState(initialMetric);
   const [expanded, setExpanded] = useState(false);
 

@@ -1,12 +1,14 @@
 "use client";
+import { TaskType } from "@/lib/types";
 
 interface Props {
   selected: string;
   onSelect: (metric: string) => void;
+  task: TaskType | "";
   disabled?: boolean;
 }
 
-const METRICS = [
+const ALL_METRICS = [
   { value: "average", label: "Average (All)" },
   { value: "mu_fidelity", label: "Accuracy (Fidelity)" },
   { value: "abpc", label: "Accuracy (AbPC)" },
@@ -14,12 +16,16 @@ const METRICS = [
   { value: "complexity", label: "Complexity" },
 ];
 
-export default function RankingMetricSelector({ selected, onSelect, disabled }: Props) {
+export default function RankingMetricSelector({ selected, onSelect, task, disabled }: Props) {
+  const metrics = task === "text"
+    ? ALL_METRICS.filter((m) => m.value !== "mu_fidelity")
+    : ALL_METRICS;
+
   return (
     <div className="space-y-1">
       <label className="block text-sm font-semibold text-gray-700">Ranking Metric</label>
       <div className="flex flex-wrap gap-1.5">
-        {METRICS.map((m) => (
+        {metrics.map((m) => (
           <button
             key={m.value}
             onClick={() => onSelect(m.value)}
