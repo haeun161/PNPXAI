@@ -61,7 +61,7 @@ export default function ResultsPanel({ results, task, rankingMetric: initialMetr
     );
   }
 
-  const rankedResults = rerank(results, activeMetric);
+  const rankedResults = rerank(results, activeMetric).filter((r) => r.status !== "failed");
   const activeLabel = RANKING_OPTIONS.find((o) => o.value === activeMetric)?.label ?? activeMetric;
 
   // Expanded: fullscreen overlay showing all results in a grid
