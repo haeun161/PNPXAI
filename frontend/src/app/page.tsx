@@ -9,6 +9,7 @@ import RankingMetricSelector from "@/components/RankingMetricSelector";
 import PredictionInfo from "@/components/PredictionInfo";
 import ResultsPanel from "@/components/ResultsPanel";
 import ProgressIndicator from "@/components/ProgressIndicator";
+import SampleDataSelector from "@/components/SampleDataSelector";
 import { useExplainJob } from "@/hooks/useExplainJob";
 
 export default function Home() {
@@ -50,11 +51,16 @@ export default function Home() {
             <h1 className="text-xl font-bold text-gray-900">XAI Demo Platform <span className="text-sm font-normal text-blue-600">v2</span></h1>
             <p className="text-sm text-gray-500">Multi-modal eXplainable AI powered by PnPXAI</p>
           </div>
-          {(job || loading) && (
-            <button onClick={handleReset} className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5">
-              New Analysis
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <a href="/optimizer" className="text-sm text-green-600 hover:text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
+              Optimizer
+            </a>
+            {(job || loading) && (
+              <button onClick={handleReset} className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5">
+                New Analysis
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -63,8 +69,9 @@ export default function Home() {
           {/* Left Panel */}
           <div className="w-80 flex-shrink-0 space-y-4">
             <TaskSelector selected={task} onSelect={handleTaskChange} disabled={loading} />
-            <DataInput task={task} onDataReady={(data) => setInputData(data)} disabled={loading} />
             <ModelSelector task={task} selected={model} onSelect={(m) => { setModel(m); setExplainers([]); }} disabled={loading} />
+            <DataInput task={task} onDataReady={(data) => setInputData(data)} disabled={loading} />
+            <SampleDataSelector task={task} onSampleSelect={(blob) => setInputData(blob)} disabled={loading} />
             <ExplainerSelector task={task} model={model} selected={explainers} onSelect={setExplainers} disabled={loading} />
             <RankingMetricSelector selected={rankingMetric} onSelect={setRankingMetric} task={task} disabled={loading} />
 

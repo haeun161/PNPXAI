@@ -10,6 +10,10 @@ from backend.tasks import get_task_handler, list_tasks
 from backend.core.image_utils import load_and_validate_image
 from backend.core.job_manager import create_job, get_job, store_uploaded_data, VISUALIZATION_DIR
 from backend.core.pipeline import run_explanation_pipeline
+from backend.optimizer.optimizer_service import (
+    get_explainer_params, run_optimization, run_with_custom_params,
+    save_history, get_history, get_history_record, load_record_input_data,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -116,3 +120,141 @@ async def get_original_data(job_id: str, filename: str):
     elif filename.endswith(".csv"):
         return FileResponse(file_path, media_type="text/csv")
     return FileResponse(file_path)
+
+
+# ── Optimizer Endpoints ──
+
+@router.get("/samples/{task}")
+async def get_samples(task: str):
+    """List available sample data files for a task."""
+    import glob
+    sample_dir = os.path.join("sample_data", task)
+    if not os.path.exists(sample_dir):
+        return []
+    files = glob.glob(os.path.join(sample_dir, "*"))
+    return [{"name": os.path.basename(f), "path": f"/{task}/{os.path.basename(f)}"} for f in sorted(files)]
+
+
+@router.get("/samples/{task}/{filename}")
+async def get_sample_file(task: str, filename: str):
+    """Serve a sample data file."""
+    file_path = os.path.join("sample_data", task, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Sample not found")
+    if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".jpeg"):
+        return FileResponse(file_path, media_type="image/png")
+    elif filename.endswith(".txt"):
+        return FileResponse(file_path, media_type="text/plain")
+    elif filename.endswith(".csv"):
+        return FileResponse(file_path, media_type="text/csv")
+    return FileResponse(file_path)
+
+
+@router.get("/optimizer/params/{explainer_name}")
+async def get_params(explainer_name: str):
+    return get_explainer_params(explainer_name)
+
+
+@router.post("/optimizer/optimize")
+async def optimize(
+    task: str = Query(...),
+    model_name: str = Query(...),
+    explainer_name: str = Query(...),
+    metric_name: str = Query("AbPC"),
+    n_trials: int = Query(20),
+    file: UploadFile = File(...),
+):
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large.")
+
+    handler = get_task_handler(task)
+    if task == "image":
+        input_data = load_and_validate_image(contents)
+    elif task == "text":
+        input_data = contents.decode("utf-8", errors="replace")
+    else:
+        input_data = contents
+
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None, run_optimization, task, model_name, explainer_name, metric_name, input_data, n_trials
+    )
+
+    save_history(result)
+    return result
+
+
+@router.post("/optimizer/custom")
+async def run_custom(
+    task: str = Query(...),
+    model_name: str = Query(...),
+    explainer_name: str = Query(...),
+    custom_params: str = Query("{}"),
+    file: UploadFile = File(...),
+):
+    import json as json_mod
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large.")
+
+    handler = get_task_handler(task)
+    if task == "image":
+        input_data = load_and_validate_image(contents)
+    elif task == "text":
+        input_data = contents.decode("utf-8", errors="replace")
+    else:
+        input_data = contents
+
+    try:
+        params = json_mod.loads(custom_params)
+    except json_mod.JSONDecodeError:
+        params = {}
+
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None, run_with_custom_params, task, model_name, explainer_name, params, input_data
+    )
+    return result
+
+
+@router.get("/optimizer/history")
+async def optimizer_history():
+    return get_history()
+
+
+@router.get("/optimizer/history/{record_id}")
+async def get_record(record_id: str):
+    record = get_history_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return record
+
+
+@router.post("/optimizer/history/{record_id}/custom")
+async def run_custom_from_history(
+    record_id: str,
+    explainer_name: str = Query(...),
+    custom_params: str = Query("{}"),
+):
+    import json as json_mod
+    record = get_history_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    task = record["task"]
+    model_name = record["model_name"]
+    input_data = load_record_input_data(record_id, task)
+    if input_data is None:
+        raise HTTPException(status_code=404, detail="Saved input data not found")
+
+    try:
+        params = json_mod.loads(custom_params)
+    except json_mod.JSONDecodeError:
+        params = {}
+
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None, run_with_custom_params, task, model_name, explainer_name, params, input_data
+    )
+    return result
