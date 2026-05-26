@@ -1,3 +1,4 @@
+import copy
 import os
 import numpy as np
 import torch
@@ -42,7 +43,7 @@ def _get_pnpxai_metric(name: str, model, explainer_instance=None):
     return cls(model=model, explainer=explainer_instance)
 
 
-def _run_image_inference(model, input_tensor):
+def _run_image_inference(model, input_tensor, hf_label_map=None):
     """Run image classification inference, return (target_class, predictions, input_tensor)."""
     model.eval()
     with torch.no_grad():
@@ -50,15 +51,21 @@ def _run_image_inference(model, input_tensor):
         probabilities = torch.softmax(output, dim=1)[0]
         top5_probs, top5_indices = torch.topk(probabilities, min(5, len(probabilities)))
 
-    labels = _load_imagenet_labels()
-    target_class = top5_indices[0].item()
+    if hf_label_map:
+        get_label = lambda idx: hf_label_map.get(idx, str(idx))
+    else:
+        imagenet_labels = _load_imagenet_labels()
+        get_label = lambda idx: imagenet_labels[idx] if idx < len(imagenet_labels) else str(idx)
 
+    target_class = top5_indices[0].item()
     predictions = [
-        {"class_name": labels[idx.item()] if idx.item() < len(labels) else str(idx.item()),
-         "probability": round(prob.item() * 100, 2)}
+        {"class_name": get_label(idx.item()), "probability": round(prob.item() * 100, 2)}
         for prob, idx in zip(top5_probs, top5_indices)
     ]
     return target_class, predictions, input_tensor
+
+
+_GRADIENT_FREE_TEXT_EXPLAINERS = {"Lime", "KernelShap"}
 
 
 class _TextEmbeddingWrapper(torch.nn.Module):
@@ -76,6 +83,22 @@ class _TextEmbeddingWrapper(torch.nn.Module):
     def forward(self, inputs_embeds):
         # DistilBERT: pass inputs_embeds directly, skipping token embedding lookup
         output = self.model(inputs_embeds=inputs_embeds)
+        logits = output.logits if hasattr(output, "logits") else output[0]
+        return logits
+
+
+class _TextInputIdsWrapper(torch.nn.Module):
+    """Wrapper for LIME/KernelSHAP: accepts input_ids (long) and returns logits.
+
+    These perturbation-based methods don't need gradients and work at the token
+    level using NoMask1d feature masks, so they need (bsz, seq_len) integer input.
+    """
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, input_ids):
+        output = self.model(input_ids=input_ids)
         logits = output.logits if hasattr(output, "logits") else output[0]
         return logits
 
@@ -113,7 +136,7 @@ def _run_text_inference(handler, model, raw_text, model_name):
     input_embeds = embedding_layer(input_ids).detach().requires_grad_(True)
     wrapper_model = _TextEmbeddingWrapper(model, embedding_layer)
 
-    return target_class, predictions, input_embeds, tokens, wrapper_model
+    return target_class, predictions, input_embeds, input_ids, tokens, wrapper_model
 
 
 def run_explanation_pipeline(
@@ -138,14 +161,16 @@ def run_explanation_pipeline(
 
         # Task-specific inference
         tokens_for_viz = None
+        text_input_ids = None
         explainer_model = model  # model used for explainer (may be wrapper for text)
         if task == "image":
-            input_data = handler.preprocess_input(raw_data)
-            target_class, predictions, input_tensor = _run_image_inference(model, input_data)
+            input_data = handler.preprocess_input(raw_data, model_name)
+            hf_label_map = getattr(handler, "get_hf_label_map", lambda m: {})(model_name)
+            target_class, predictions, input_tensor = _run_image_inference(model, input_data, hf_label_map)
             update_job_predictions(job_id, predictions)
         elif task == "text":
             text = raw_data if isinstance(raw_data, str) else str(raw_data)
-            target_class, predictions, input_tensor, tokens_for_viz, wrapper_model = _run_text_inference(handler, model, text, model_name)
+            target_class, predictions, input_tensor, text_input_ids, tokens_for_viz, wrapper_model = _run_text_inference(handler, model, text, model_name)
             explainer_model = wrapper_model  # use embedding wrapper for XAI
             update_job_predictions(job_id, predictions)
         else:
@@ -171,18 +196,39 @@ def run_explanation_pipeline(
 
             try:
                 ExplainerClass = _get_pnpxai_explainer(exp_name)
-                explainer_instance = ExplainerClass(explainer_model)
+
+                # LIME/KernelSHAP for text: perturbation-based, need input_ids + NoMask1d.
+                # Gradient-based methods need float embeddings via _TextEmbeddingWrapper.
+                # LRP/RAP: use a deep-copy of the model — zennit's canonizer merges BatchNorm
+                # weights into conv layers in-place and may leave them corrupted on failure,
+                # which would poison the shared cached model for all subsequent explainers.
+                _STATE_MUTATING_EXPLAINERS = {"LRPUniformEpsilon", "LRPEpsilonPlus",
+                                              "LRPEpsilonGammaBox", "LRPEpsilonAlpha2Beta1", "RAP"}
+                if task == "text" and exp_name in _GRADIENT_FREE_TEXT_EXPLAINERS:
+                    from pnpxai.explainers.utils.feature_masks import NoMask1d
+                    active_model = _TextInputIdsWrapper(model)
+                    active_inp = text_input_ids.clone()
+                    explainer_instance = ExplainerClass(active_model, feature_mask_fn=NoMask1d())
+                elif exp_name in _STATE_MUTATING_EXPLAINERS:
+                    active_model = copy.deepcopy(explainer_model)
+                    active_inp = input_tensor.clone() if input_tensor is not None else None
+                    if active_inp is not None and active_inp.is_floating_point():
+                        active_inp = active_inp.requires_grad_(True)
+                    explainer_instance = ExplainerClass(active_model)
+                else:
+                    active_model = explainer_model
+                    active_inp = input_tensor.clone() if input_tensor is not None else None
+                    if active_inp is not None and active_inp.is_floating_point():
+                        active_inp = active_inp.requires_grad_(True)
+                    explainer_instance = ExplainerClass(active_model)
 
                 # Compute attribution
-                if input_tensor is not None:
-                    inp = input_tensor.clone()
-                    if inp.is_floating_point():
-                        inp = inp.requires_grad_(True)
-                    target_tensor = torch.tensor([target_class], dtype=torch.long)
+                target_tensor = torch.tensor([target_class], dtype=torch.long)
+                if active_inp is not None:
                     try:
-                        attribution_raw = explainer_instance.attribute(inp, target_tensor)
+                        attribution_raw = explainer_instance.attribute(active_inp, target_tensor)
                     except TypeError:
-                        attribution_raw = explainer_instance.attribute(inputs=inp, targets=target_tensor)
+                        attribution_raw = explainer_instance.attribute(inputs=active_inp, targets=target_tensor)
                     attribution = normalize_attribution(attribution_raw)
                 else:
                     attribution = np.zeros(10)
@@ -193,10 +239,10 @@ def run_explanation_pipeline(
                 metric_list = ["AbPC", "Sensitivity", "Complexity"] if task == "text" else ["MuFidelity", "AbPC", "Sensitivity", "Complexity"]
                 for metric_name in metric_list:
                     try:
-                        metric_instance = _get_pnpxai_metric(metric_name, explainer_model, explainer_instance)
-                        if input_tensor is not None:
+                        metric_instance = _get_pnpxai_metric(metric_name, active_model, explainer_instance)
+                        if active_inp is not None:
                             result = metric_instance.evaluate(
-                                inp, target_tensor, attribution_raw
+                                active_inp, target_tensor, attribution_raw
                             )
                             metric_values[metric_name.lower()] = extract_metric_value(result)
                         else:

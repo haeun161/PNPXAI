@@ -13,8 +13,8 @@ def normalize_attribution(attribution) -> np.ndarray:
     else:
         attr_np = np.array(attribution)
 
-    # Squeeze batch dimension if present
-    while attr_np.ndim > 2 and attr_np.shape[0] == 1:
+    # Squeeze batch dimension if present (only once — GradCam returns (1,1,H,W))
+    if attr_np.ndim >= 1 and attr_np.shape[0] == 1:
         attr_np = attr_np.squeeze(0)
 
     # Aggregate to 1D or 2D depending on shape

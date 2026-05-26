@@ -4,7 +4,7 @@ import { ExplainerResult, TaskType } from "@/lib/types";
 interface Props {
   result: ExplainerResult;
   task: TaskType;
-  rankingMetric: string;
+  activeMetrics: string[];
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -14,7 +14,7 @@ const METRIC_LABELS: Record<string, string> = {
   complexity: "Complexity",
 };
 
-export default function ResultCard({ result, task, rankingMetric }: Props) {
+export default function ResultCard({ result, task, activeMetrics }: Props) {
   const isCompleted = result.status === "completed";
   const isNotSupported = result.status === "not_supported";
   const isFailed = result.status === "failed";
@@ -94,7 +94,7 @@ export default function ResultCard({ result, task, rankingMetric }: Props) {
         {isCompleted && (
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-center">
             {metrics.map((m) => {
-              const isRanked = rankingMetric === m.key || rankingMetric === "average";
+              const isRanked = activeMetrics.includes(m.key);
               return (
                 <div key={m.key} className={isRanked ? "bg-blue-50 rounded px-1" : ""}>
                   <p className="text-[10px] text-gray-400">{m.label}</p>

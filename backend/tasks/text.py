@@ -27,6 +27,11 @@ _TEXT_EXPLAINERS = [
 
 _loaded_models: dict[str, Any] = {}
 _loaded_tokenizers: dict[str, Any] = {}
+_hf_text_cache: dict[str, dict] = {}
+
+
+def _is_preset(model_name: str) -> bool:
+    return model_name in _TEXT_MODELS
 
 
 def _get_tokenizer(model_name: str):
@@ -35,6 +40,23 @@ def _get_tokenizer(model_name: str):
         hf_id = _TEXT_MODELS[model_name]["hf_id"]
         _loaded_tokenizers[model_name] = AutoTokenizer.from_pretrained(hf_id)
     return _loaded_tokenizers[model_name]
+
+
+def _load_hf_text_model(model_id: str) -> dict:
+    if model_id not in _hf_text_cache:
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id)
+        model.eval()
+        label_map = {}
+        if hasattr(model.config, "id2label"):
+            label_map = {int(k): v for k, v in model.config.id2label.items()}
+        _hf_text_cache[model_id] = {
+            "model": model,
+            "tokenizer": tokenizer,
+            "label_map": label_map,
+        }
+    return _hf_text_cache[model_id]
 
 
 class TextTaskHandler(TaskHandler):
@@ -57,6 +79,8 @@ class TextTaskHandler(TaskHandler):
         ]
 
     def load_model(self, model_name: str) -> torch.nn.Module:
+        if not _is_preset(model_name):
+            return _load_hf_text_model(model_name)["model"]
         if model_name not in _loaded_models:
             from transformers import AutoModelForSequenceClassification
             hf_id = _TEXT_MODELS[model_name]["hf_id"]
@@ -66,17 +90,21 @@ class TextTaskHandler(TaskHandler):
         return _loaded_models[model_name]
 
     def get_label_map(self, model_name: str) -> dict:
+        if not _is_preset(model_name):
+            return _load_hf_text_model(model_name).get("label_map", {})
         return _TEXT_MODELS.get(model_name, {}).get("label_map", {})
 
     def tokenize(self, text: str, model_name: str):
-        """Tokenize text and return (input_ids_tensor, tokens_list, attention_mask)."""
-        tokenizer = _get_tokenizer(model_name)
+        if not _is_preset(model_name):
+            tokenizer = _load_hf_text_model(model_name)["tokenizer"]
+        else:
+            tokenizer = _get_tokenizer(model_name)
         encoded = tokenizer(text, return_tensors="pt", truncation=True, max_length=128, padding=True)
         tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0])
         return encoded, tokens
 
     def preprocess_input(self, raw_data: Any) -> Any:
-        return raw_data  # Text string, tokenized later in pipeline
+        return raw_data
 
     def get_modality(self):
         from pnpxai.core.modality.modality import TextModality
