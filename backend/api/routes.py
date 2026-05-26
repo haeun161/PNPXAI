@@ -13,6 +13,7 @@ from backend.core.pipeline import run_explanation_pipeline
 from backend.optimizer.optimizer_service import (
     get_explainer_params, run_optimization, run_with_custom_params,
     save_history, get_history, get_history_record, load_record_input_data,
+    delete_history_record,
 )
 
 router = APIRouter(prefix="/api")
@@ -221,6 +222,15 @@ async def run_custom(
 @router.get("/optimizer/history")
 async def optimizer_history():
     return get_history()
+
+
+@router.delete("/optimizer/history/{record_id}")
+async def delete_record(record_id: str):
+    from backend.optimizer.optimizer_service import delete_history_record
+    success = delete_history_record(record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"status": "deleted"}
 
 
 @router.get("/optimizer/history/{record_id}")

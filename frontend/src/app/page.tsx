@@ -9,7 +9,6 @@ import RankingMetricSelector from "@/components/RankingMetricSelector";
 import PredictionInfo from "@/components/PredictionInfo";
 import ResultsPanel from "@/components/ResultsPanel";
 import ProgressIndicator from "@/components/ProgressIndicator";
-import SampleDataSelector from "@/components/SampleDataSelector";
 import { useExplainJob } from "@/hooks/useExplainJob";
 
 export default function Home() {
@@ -71,7 +70,6 @@ export default function Home() {
             <TaskSelector selected={task} onSelect={handleTaskChange} disabled={loading} />
             <ModelSelector task={task} selected={model} onSelect={(m) => { setModel(m); setExplainers([]); }} disabled={loading} />
             <DataInput task={task} onDataReady={(data) => setInputData(data)} disabled={loading} />
-            <SampleDataSelector task={task} onSampleSelect={(blob) => setInputData(blob)} disabled={loading} />
             <ExplainerSelector task={task} model={model} selected={explainers} onSelect={setExplainers} disabled={loading} />
             <RankingMetricSelector selected={rankingMetric} onSelect={setRankingMetric} task={task} disabled={loading} />
 

@@ -247,5 +247,30 @@ def get_history_record(record_id: str) -> dict | None:
     return next((r for r in records if r.get("record_id") == record_id), None)
 
 
+def delete_history_record(record_id: str) -> bool:
+    history_file = os.path.join(HISTORY_DIR, "records.json")
+    if not os.path.exists(history_file):
+        return False
+    with open(history_file, "r") as f:
+        try:
+            records = json.load(f)
+        except json.JSONDecodeError:
+            return False
+
+    new_records = [r for r in records if r.get("record_id") != record_id]
+    if len(new_records) == len(records):
+        return False
+
+    # Clean up data file
+    for ext in [".png", ".txt", ".bin"]:
+        p = os.path.join(DATA_DIR, f"{record_id}{ext}")
+        if os.path.exists(p):
+            os.remove(p)
+
+    with open(history_file, "w") as f:
+        json.dump(new_records, f, indent=2, default=str)
+    return True
+
+
 def load_record_input_data(record_id: str, task: str) -> Any:
     return _load_input_data(record_id, task)

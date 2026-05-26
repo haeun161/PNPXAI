@@ -3,9 +3,7 @@ import { useState, useEffect } from "react";
 import { TaskType, ExplainerInfo } from "@/lib/types";
 import TaskSelector from "@/components/TaskSelector";
 import ModelSelector from "@/components/ModelSelector";
-import ImageUploader from "@/components/ImageUploader";
-import TextInput from "@/components/TextInput";
-import SampleDataSelector from "@/components/SampleDataSelector";
+import DataInput from "@/components/DataInput";
 import { getExplainers } from "@/lib/api";
 
 const BASE = "/api";
@@ -230,9 +228,7 @@ export default function OptimizerPage() {
               <>
                 <ModelSelector task={task} selected={model} onSelect={(m) => { setModel(m); setExplainer(""); }} disabled={loading} />
 
-                {task === "image" && <ImageUploader onImageSelect={(f) => { setInputFile(f); setInputPreview(URL.createObjectURL(f)); }} disabled={loading} />}
-                {task === "text" && <TextInput onTextReady={(blob, preview) => { setInputFile(blob); setInputPreview(preview); }} disabled={loading} />}
-                <SampleDataSelector task={task} onSampleSelect={(blob, preview) => { setInputFile(blob); setInputPreview(preview); }} disabled={loading} />
+                <DataInput task={task} onDataReady={(data, preview) => { setInputFile(data); setInputPreview(preview); }} disabled={loading} />
 
                 {model && (
                   <div className="space-y-2">
@@ -283,18 +279,40 @@ export default function OptimizerPage() {
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-700">Recent Sessions</h3>
                 {history.map((h, i) => (
-                  <button
+                  <div
                     key={h.record_id || i}
-                    onClick={() => handleRestoreHistory(h)}
-                    className={`w-full text-left bg-gray-50 hover:bg-blue-50 rounded-lg p-2.5 text-xs transition-colors border ${
+                    className={`relative bg-gray-50 hover:bg-blue-50 rounded-lg p-2.5 text-xs transition-colors border ${
                       restoredRecordId === h.record_id ? "border-blue-400 bg-blue-50" : "border-transparent"
                     }`}
                   >
-                    <div className="font-medium text-gray-700">{h.explainer_name}</div>
-                    <div className="text-gray-400">{h.task} / {h.model_name}</div>
-                    <div className="text-gray-400">{new Date(h.timestamp * 1000).toLocaleString()}</div>
-                    <div className="text-blue-500 mt-1">Click to resume →</div>
-                  </button>
+                    <button
+                      onClick={() => handleRestoreHistory(h)}
+                      className="w-full text-left"
+                    >
+                      <div className="font-medium text-gray-700">{h.explainer_name}</div>
+                      <div className="text-gray-400">{h.task} / {h.model_name}</div>
+                      <div className="text-gray-400">{new Date(h.timestamp * 1000).toLocaleString()}</div>
+                      <div className="text-blue-500 mt-1">Click to resume →</div>
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await fetch(`${BASE}/optimizer/history/${h.record_id}`, { method: "DELETE" });
+                        setHistory((prev) => prev.filter((r) => r.record_id !== h.record_id));
+                        if (restoredRecordId === h.record_id) {
+                          setRestoredRecordId(null);
+                          setOptResult(null);
+                          setCustomResult(null);
+                        }
+                      }}
+                      className="absolute top-2 right-2 text-gray-300 hover:text-red-500 transition-colors"
+                      title="Delete record"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

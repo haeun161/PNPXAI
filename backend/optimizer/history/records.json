@@ -1,5 +1,77 @@
 [
   {
+    "record_id": "34522ae9",
+    "task": "image",
+    "model_name": "resnet50",
+    "explainer_name": "Lime",
+    "metric_name": "AbPC",
+    "default_params": {
+      "n_samples": 25,
+      "baseline_fn": "zeros",
+      "feature_mask_fn": "felzenszwalb"
+    },
+    "optimized_params": {
+      "n_samples": 25,
+      "baseline_fn": "zeros",
+      "feature_mask_fn": "felzenszwalb"
+    },
+    "default_metrics": {
+      "complexity": 0.39478964922816223
+    },
+    "optimized_metrics": {
+      "complexity": 0.39478964922816223
+    },
+    "available_params": [
+      {
+        "name": "n_samples",
+        "type": "int",
+        "default": 25,
+        "description": ""
+      },
+      {
+        "name": "baseline_fn",
+        "type": "str",
+        "default": "zeros",
+        "description": ""
+      },
+      {
+        "name": "feature_mask_fn",
+        "type": "str",
+        "default": "felzenszwalb",
+        "description": ""
+      }
+    ],
+    "predictions": [
+      {
+        "class_name": "African elephant",
+        "probability": 33.91
+      },
+      {
+        "class_name": "Indian elephant",
+        "probability": 28.61
+      },
+      {
+        "class_name": "tusker",
+        "probability": 3.69
+      },
+      {
+        "class_name": "sandbar",
+        "probability": 0.52
+      },
+      {
+        "class_name": "promontory",
+        "probability": 0.26
+      }
+    ],
+    "visualization_url": "/api/jobs/opt_1779766779408/visualizations/Lime.png",
+    "attribution_summary": {
+      "mean": 0.026348358020186424,
+      "max": 1.0,
+      "nonzero_ratio": 0.07280373086734694
+    },
+    "timestamp": 1779766780.9562292
+  },
+  {
     "record_id": "cd912ab3",
     "task": "image",
     "model_name": "resnet50",
@@ -192,68 +264,5 @@
       "nonzero_ratio": 0.02379623724489796
     },
     "timestamp": 1779765420.2273765
-  },
-  {
-    "task": "image",
-    "model_name": "resnet50",
-    "explainer_name": "LRPUniformEpsilon",
-    "metric_name": "AbPC",
-    "default_params": {
-      "epsilon": 0.25,
-      "stabilizer": 1e-06
-    },
-    "optimized_params": {
-      "epsilon": 0.25,
-      "stabilizer": 1e-06
-    },
-    "default_metrics": {
-      "complexity": 0.446137613460957
-    },
-    "optimized_metrics": {
-      "complexity": 0.446137613460957
-    },
-    "available_params": [
-      {
-        "name": "epsilon",
-        "type": "float",
-        "default": 0.25,
-        "description": ""
-      },
-      {
-        "name": "stabilizer",
-        "type": "float",
-        "default": 1e-06,
-        "description": ""
-      }
-    ],
-    "predictions": [
-      {
-        "class_name": "vase",
-        "probability": 23.55
-      },
-      {
-        "class_name": "window shade",
-        "probability": 4.67
-      },
-      {
-        "class_name": "pot",
-        "probability": 3.57
-      },
-      {
-        "class_name": "window screen",
-        "probability": 2.5
-      },
-      {
-        "class_name": "dining table",
-        "probability": 1.43
-      }
-    ],
-    "visualization_url": "/api/jobs/opt_1779765010962/visualizations/LRPUniformEpsilon.png",
-    "attribution_summary": {
-      "mean": 0.03330465778708458,
-      "max": 1.0,
-      "nonzero_ratio": 0.06267936862244898
-    },
-    "timestamp": 1779765011.17433
   }
 ]
