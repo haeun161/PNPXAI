@@ -39,8 +39,7 @@ export default function ImageUploader({ onImageSelect, disabled }: Props) {
   );
 
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-semibold text-gray-700">Upload Image</label>
+    <div className="space-y-2">
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}

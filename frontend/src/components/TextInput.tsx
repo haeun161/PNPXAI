@@ -31,7 +31,7 @@ export default function TextInput({ onTextReady, disabled }: Props) {
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-semibold text-gray-700">Input Text</label>
+      {/* no label - tab already indicates this is upload */}
       <textarea
         value={text}
         onChange={(e) => handleTextChange(e.target.value)}

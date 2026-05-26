@@ -36,7 +36,7 @@ export default function TimeSeriesInput({ onDataReady, disabled }: Props) {
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-semibold text-gray-700">Time-Series Data</label>
+      {/* no label - tab already indicates this is upload */}
       <input
         value={values}
         onChange={(e) => handleValuesChange(e.target.value)}
